@@ -1,7 +1,7 @@
-version: '3.8'
+#version: '3.8'
 
 services:
-  # --- Data & State Layer ---
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: workspace-postgres
@@ -45,7 +45,8 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- Core Backend ---
+
+
   backend-django:
     build:
       context: ./backend-django
@@ -63,7 +64,7 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  # --- AI/ML Backend ---
+
   ml-fastapi:
     build:
       context: ./ml-fastapi
@@ -85,7 +86,7 @@ services:
     #           count: 1
     #           capabilities: [gpu]
 
-  # --- Client Layer ---
+
   frontend:
     build:
       context: ./frontend

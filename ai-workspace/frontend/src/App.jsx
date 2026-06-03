@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
-// Make sure credentials (cookies) are sent with every fetch
-// Update this object at the top of App.jsx
 const fetchOptions = {
   headers: { 'Content-Type': 'application/json' },
-  credentials: 'include', // <-- THIS IS THE MISSING PIECE
+  credentials: 'include',
 };
 
 function App() {
@@ -18,7 +16,7 @@ function App() {
     if (user) fetchProjects();
   }, [user]);
 
-const fetchProjects = async () => {
+  const fetchProjects = async () => {
     const res = await fetch('http://localhost:8000/api/projects/', fetchOptions);
     if (res.ok) setProjects(await res.json());
   };
@@ -29,6 +27,7 @@ const fetchProjects = async () => {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
+
     if (res.ok) {
       const data = await res.json();
       setUser(data.username);
@@ -43,42 +42,132 @@ const fetchProjects = async () => {
       method: 'POST',
       body: JSON.stringify({ name: newProjectName }),
     });
+
     if (res.ok) {
       setNewProjectName('');
-      fetchProjects(); // Refresh the list
+      fetchProjects();
     }
   };
 
   if (!user) {
     return (
-      <div style={{ padding: '2rem', fontFamily: 'system-ui' }}>
-        <h2>AI Research Workspace - Login</h2>
-        <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} /><br/><br/>
-        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} /><br/><br/>
-        <button onClick={() => handleAuth('login')}>Login</button>
-        <button onClick={() => handleAuth('signup')} style={{ marginLeft: '10px' }}>Sign Up</button>
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          background: 'linear-gradient(135deg,#667eea,#764ba2)',
+          fontFamily: 'system-ui'
+        }}
+      >
+        <div
+          style={{
+            width: '420px',
+            background: '#fff',
+            padding: '40px',
+            borderRadius: '24px',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.2)'
+          }}
+        >
+          <h1 style={{ textAlign: 'center' }}>🚀 AI Research Workspace</h1>
+
+          <input
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            style={{ width: '100%', padding: '14px', marginTop: '20px', borderRadius: '12px' }}
+          />
+
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{ width: '100%', padding: '14px', marginTop: '15px', borderRadius: '12px' }}
+          />
+
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+            <button onClick={() => handleAuth('login')} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: 'none', background: '#667eea', color: '#fff' }}>
+              Login
+            </button>
+            <button onClick={() => handleAuth('signup')} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: 'none', background: '#764ba2', color: '#fff' }}>
+              Sign Up
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2rem', fontFamily: 'system-ui' }}>
-      <h2>Welcome, {user}</h2>
-      
-      <div style={{ border: '1px solid #ccc', padding: '1rem', marginTop: '1rem' }}>
-        <h3>Your Workspaces</h3>
-        {projects.length === 0 ? <p>No projects found. Create one below!</p> : (
-          <ul>
-            {projects.map(p => <li key={p.id}>{p.name} (Team: {p.team__name})</li>)}
+    <div style={{ minHeight: '100vh', background: '#f4f7fc', padding: '40px', fontFamily: 'system-ui' }}>
+      <div
+        style={{
+          background: 'linear-gradient(135deg,#667eea,#764ba2)',
+          color: '#fff',
+          padding: '30px',
+          borderRadius: '24px',
+          marginBottom: '25px'
+        }}
+      >
+        <h1>👋 Welcome, {user}</h1>
+        <p>Manage your AI projects efficiently</p>
+      </div>
+
+      <div
+        style={{
+          background: '#fff',
+          padding: '25px',
+          borderRadius: '20px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.08)'
+        }}
+      >
+        <h2>Your Workspaces</h2>
+
+        {projects.length === 0 ? (
+          <p>No projects found. Create one below!</p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {projects.map((p) => (
+              <li
+                key={p.id}
+                style={{
+                  background: '#eef2ff',
+                  padding: '15px',
+                  borderRadius: '12px',
+                  marginBottom: '12px'
+                }}
+              >
+                📁 {p.name}
+                <br />
+                <small>Team: {p.team__name}</small>
+              </li>
+            ))}
           </ul>
         )}
-        
-        <input 
-          placeholder="New Project Name" 
-          value={newProjectName} 
-          onChange={e => setNewProjectName(e.target.value)} 
-        />
-        <button onClick={createProject} style={{ marginLeft: '10px' }}>Create Project</button>
+
+        <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+          <input
+            placeholder="New Project Name"
+            value={newProjectName}
+            onChange={(e) => setNewProjectName(e.target.value)}
+            style={{ flex: 1, padding: '14px', borderRadius: '12px' }}
+          />
+
+          <button
+            onClick={createProject}
+            style={{
+              padding: '14px 20px',
+              borderRadius: '12px',
+              border: 'none',
+              background: '#667eea',
+              color: '#fff'
+            }}
+          >
+            ➕ Create
+          </button>
+        </div>
       </div>
     </div>
   );

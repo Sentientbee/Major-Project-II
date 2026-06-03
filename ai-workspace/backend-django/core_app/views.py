@@ -1,5 +1,4 @@
 from django.shortcuts import render
-
 import json
 from django.contrib.auth import authenticate, login, get_user_model
 from django.http import JsonResponse
