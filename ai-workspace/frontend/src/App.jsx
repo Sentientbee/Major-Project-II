@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
 // Make sure credentials (cookies) are sent with every fetch
+// Update this object at the top of App.jsx
 const fetchOptions = {
   headers: { 'Content-Type': 'application/json' },
+  credentials: 'include', // <-- THIS IS THE MISSING PIECE
 };
 
 function App() {
@@ -16,8 +18,8 @@ function App() {
     if (user) fetchProjects();
   }, [user]);
 
-  const fetchProjects = async () => {
-    const res = await fetch('http://localhost:8000/api/projects/');
+const fetchProjects = async () => {
+    const res = await fetch('http://localhost:8000/api/projects/', fetchOptions);
     if (res.ok) setProjects(await res.json());
   };
 
