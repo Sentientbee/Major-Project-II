@@ -1,5 +1,7 @@
 from django.shortcuts import render
 import json
+from .models import Document
+from .tasks import process_document_task
 from django.contrib.auth import authenticate, login, get_user_model
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
@@ -51,3 +53,26 @@ def project_list_create(request):
         team = request.user.teams.first() 
         project = Project.objects.create(name=data.get('name'), team=team)
         return JsonResponse({'id': project.id, 'name': project.name}, status=201)
+
+@csrf_exempt
+def document_list_create(request, project_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
+
+    project = Project.objects.get(id=project_id, team__members=request.user)
+
+    if request.method == 'GET':
+        docs = project.documents.values('id', 'title', 'status', 'uploaded_at')
+        return JsonResponse(list(docs), safe=False)
+
+    elif request.method == 'POST':
+        file = request.FILES.get('file')
+        if not file:
+            return JsonResponse({'error': 'No file provided'}, status=400)
+        
+        doc = Document.objects.create(title=file.name, file=file, project=project, status='Uploaded')
+        
+        # Trigger Celery Background Job
+        process_document_task.delay(str(doc.id))
+        
+        return JsonResponse({'id': str(doc.id), 'title': doc.title, 'status': doc.status}, status=201)

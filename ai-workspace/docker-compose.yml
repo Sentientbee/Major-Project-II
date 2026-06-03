@@ -64,6 +64,18 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  celery-worker:
+    build:
+      context: ./backend-django
+    container_name: workspace-celery
+    command: celery -A core worker -l INFO
+    volumes:
+      - ./backend-django:/app
+    depends_on:
+      - redis
+      - rabbitmq
+      - postgres
+
 
   ml-fastapi:
     build:
