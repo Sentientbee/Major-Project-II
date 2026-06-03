@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, String, Text, text
 from sqlalchemy import create_engine, Column, String, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.dialects.postgresql import UUID
@@ -13,8 +14,9 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# Enable pgvector extension
 with engine.connect() as conn:
-    conn.execute(engine.dialect.statement_compiler.dialect.execution_options(autocommit=True).statement_compiler.dialect.statement_compiler.dialect.execution_options(autocommit=True).statement_compiler.dialect.execution_options(autocommit=True).text("CREATE EXTENSION IF NOT EXISTS vector"))
+    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     conn.commit()
 
 class DocumentChunk(Base):
