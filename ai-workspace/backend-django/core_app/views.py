@@ -76,3 +76,41 @@ def document_list_create(request, project_id):
         process_document_task.delay(str(doc.id))
         
         return JsonResponse({'id': str(doc.id), 'title': doc.title, 'status': doc.status}, status=201)
+
+
+
+
+from django.http import StreamingHttpResponse
+import requests
+
+@csrf_exempt
+def chat_gateway(request, project_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
+
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        
+        # Verify the project belongs to the user's team
+        if not Project.objects.filter(id=project_id, team__members=request.user).exists():
+            return JsonResponse({'error': 'Not authorized'}, status=403)
+
+        # We use 'workspace-fastapi' because that's the container name in docker-compose.yml
+        fastapi_url = "http://workspace-fastapi:8001/chat/"
+        payload = {
+            "project_id": str(project_id),
+            "message": data.get("message")
+        }
+
+        def stream_generator():
+            try:
+                # Stream=True allows us to proxy the chunks as they arrive
+                with requests.post(fastapi_url, json=payload, stream=True) as r:
+                    for chunk in r.iter_content(chunk_size=1024, decode_unicode=True):
+                        if chunk:
+                            yield chunk
+            except requests.exceptions.RequestException as e:
+                yield f"Error connecting to AI service: {str(e)}"
+
+        return StreamingHttpResponse(stream_generator(), content_type='text/event-stream')
+

@@ -78,25 +78,27 @@ services:
 
 
   ml-fastapi:
-    build:
-      context: ./ml-fastapi
-    container_name: workspace-fastapi
-    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
-    volumes:
-      - ./ml-fastapi:/app
-    ports:
-      - "8001:8001"
-    depends_on:
-      - redis
-      - rabbitmq
-    # NVIDIA GPU Passthrough for your RTX 4050
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+      build:
+        context: ./ml-fastapi
+      container_name: workspace-fastapi
+      command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+      volumes:
+        - ./ml-fastapi:/app
+      ports:
+        - "8001:8001"
+      depends_on:
+        - redis
+        - rabbitmq
+      extra_hosts:                            # <-- ADD THIS
+        - "host.docker.internal:host-gateway" # <-- ADD THIS
+      # NVIDIA GPU Passthrough for your RTX 4050
+      # deploy:
+      #   resources:
+      #     reservations:
+      #       devices:
+      #         - driver: nvidia
+      #           count: 1
+      #           capabilities: [gpu]
 
 
   frontend:
