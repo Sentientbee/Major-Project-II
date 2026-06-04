@@ -6,7 +6,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 import uuid
 
 DATABASE_URL = "postgresql://myuser:mypassword@postgres:5432/workspace_db"
@@ -61,3 +61,57 @@ def ingest_document(request: IngestRequest):
         return {"status": "success", "chunks_processed": len(chunks)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+from fastapi.responses import StreamingResponse
+from langchain_openai import ChatOpenAI
+from langchain.schema import HumanMessage, SystemMessage
+
+# We use host.docker.internal to reach LMStudio running on your host machine
+chat_model = ChatOpenAI(
+    base_url="http://host.docker.internal:1234/v1",
+    api_key="lm-studio", # API key is required but ignored by LMStudio
+    streaming=True,
+    temperature=0.7
+)
+
+class ChatRequest(BaseModel):
+    project_id: str
+    message: str
+
+@app.post("/chat/")
+async def chat_endpoint(request: ChatRequest):
+    # 1. Embed the user's message
+    query_embedding = embeddings_model.embed_query(request.message)
+    
+    db = SessionLocal()
+    try:
+        # 2. Retrieve relevant chunks using pgvector's cosine distance
+        chunks = db.query(DocumentChunk).filter(
+            DocumentChunk.project_id == request.project_id
+        ).order_by(
+            DocumentChunk.embedding.cosine_distance(query_embedding)
+        ).limit(3).all()
+        
+        context = "\n\n".join([chunk.text for chunk in chunks])
+    finally:
+        db.close()
+
+    # 3. Build the prompt
+    system_prompt = (
+        "You are an AI research assistant. Use the following document context to "
+        f"answer the user's question.\n\nContext:\n{context}"
+    )
+    
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=request.message)
+    ]
+
+    # 4. Asynchronous generator to stream tokens
+    async def generate_response():
+        async for chunk in chat_model.astream(messages):
+            if chunk.content:
+                yield chunk.content
+
+    return StreamingResponse(generate_response(), media_type="text/event-stream")
