@@ -114,3 +114,101 @@ def chat_gateway(request, project_id):
 
         return StreamingHttpResponse(stream_generator(), content_type='text/event-stream')
 
+
+        from django.http import StreamingHttpResponse, JsonResponse
+from .models import Document, Project, Team, ChatMessage # Ensure ChatMessage is imported
+import requests
+import json
+
+@csrf_exempt
+def add_team_member(request, project_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
+    
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        new_username = data.get('username')
+        
+        try:
+            # Ensure the current user has access to the project
+            project = Project.objects.get(id=project_id, team__members=request.user)
+            user_to_add = User.objects.get(username=new_username)
+            project.team.members.add(user_to_add)
+            return JsonResponse({'message': f'User {new_username} added to the team.'})
+        except Project.DoesNotExist:
+            return JsonResponse({'error': 'Project not found or unauthorized'}, status=403)
+        except User.DoesNotExist:
+            return JsonResponse({'error': 'User not found'}, status=404)
+
+@csrf_exempt
+def get_chat_history(request, project_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
+    
+    if request.method == 'GET':
+        # Fetch ordered chats for the given project
+        messages = ChatMessage.objects.filter(
+            project_id=project_id, 
+            project__team__members=request.user
+        ).values('role', 'content', 'created_at')
+        return JsonResponse(list(messages), safe=False)
+
+@csrf_exempt
+def chat_gateway(request, project_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
+
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        user_message_content = data.get("message")
+        
+        # Verify the project belongs to the user's team
+        try:
+            project = Project.objects.get(id=project_id, team__members=request.user)
+        except Project.DoesNotExist:
+            return JsonResponse({'error': 'Not authorized'}, status=403)
+
+        # 1. Save the User's message instantly
+        ChatMessage.objects.create(
+            project=project, 
+            user=request.user, 
+            role='user', 
+            content=user_message_content
+        )
+
+        fastapi_url = "http://workspace-fastapi:8001/chat/"
+        payload = {
+            "project_id": str(project_id),
+            "message": user_message_content
+        }
+
+        def stream_generator():
+            full_ai_response = ""
+            try:
+                with requests.post(fastapi_url, json=payload, stream=True) as r:
+                    for chunk in r.iter_content(chunk_size=1024, decode_unicode=True):
+                        if chunk:
+                            full_ai_response += chunk
+                            yield chunk
+                # 2. Save the AI's response once the stream is completely finished
+                ChatMessage.objects.create(project=project, role='ai', content=full_ai_response)
+            except requests.exceptions.RequestException as e:
+                error_msg = f"Error connecting to AI service: {str(e)}"
+                ChatMessage.objects.create(project=project, role='ai', content=error_msg)
+                yield error_msg
+
+        return StreamingHttpResponse(stream_generator(), content_type='text/event-stream')
+
+@csrf_exempt
+def delete_project(request, project_id):
+    if not request.user.is_authenticated: return JsonResponse({'error': 'Not authenticated'}, status=401)
+    if request.method == 'DELETE':
+        Project.objects.filter(id=project_id, team__members=request.user).delete()
+        return JsonResponse({'message': 'Deleted'})
+
+@csrf_exempt
+def delete_document(request, project_id, doc_id):
+    if not request.user.is_authenticated: return JsonResponse({'error': 'Not authenticated'}, status=401)
+    if request.method == 'DELETE':
+        Document.objects.filter(id=doc_id, project_id=project_id, project__team__members=request.user).delete()
+        return JsonResponse({'message': 'Deleted'})

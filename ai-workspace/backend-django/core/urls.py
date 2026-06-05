@@ -11,4 +11,11 @@ urlpatterns = [
 
     path('api/projects/<uuid:project_id>/documents/', views.document_list_create),
     path('api/projects/<uuid:project_id>/chat/', views.chat_gateway),
+
+    # Add these underneath your existing paths in core/urls.py
+    path('api/projects/<uuid:project_id>/team/add/', views.add_team_member),
+    path('api/projects/<uuid:project_id>/chat/history/', views.get_chat_history),
+
+    path('api/projects/<uuid:project_id>/delete/', views.delete_project),
+    path('api/projects/<uuid:project_id>/documents/<uuid:doc_id>/delete/', views.delete_document),
 ]
