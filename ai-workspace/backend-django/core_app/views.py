@@ -191,3 +191,19 @@ def delete_document(request, project_id, doc_id):
         # 2. Delete the document record and file from Django
         Document.objects.filter(id=doc_id, project_id=project_id, project__team__members=request.user).delete()
         return JsonResponse({'message': 'Deleted'})
+
+
+@csrf_exempt
+def save_evaluation(request, project_id):
+    if not request.user.is_authenticated: return JsonResponse({'error': 'Not authenticated'}, status=401)
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        Evaluation.objects.create(
+            project_id=project_id,
+            prompt_a=data.get('prompt_a'),
+            prompt_b=data.get('prompt_b'),
+            response_a=data.get('response_a'),
+            response_b=data.get('response_b'),
+            winner=data.get('winner')
+        )
+        return JsonResponse({'message': 'Evaluation saved!'})

@@ -20,13 +20,20 @@ function App() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState(''); // Replaces standard alert()
-  
+
+  // Phase 5: Experiment State
+  const [promptA, setPromptA] = useState('');
+  const [promptB, setPromptB] = useState('');
+  const [resA, setResA] = useState('');
+  const [resB, setResB] = useState('');
+  const [isExperimenting, setIsExperimenting] = useState(false);
+    
   const [projects, setProjects] = useState([]);
   const [newProjectName, setNewProjectName] = useState('');
   const [activeProject, setActiveProject] = useState(null);
   
   // View State: Separates Document Upload and Chat into distinct windows/tabs
-  const [projectWindow, setProjectWindow] = useState('chat'); // 'chat' or 'docs'
+  const [projectWindow, setProjectWindow] = useState('chat'); // 'chat', 'docs', or 'experiment'
   
   const [documents, setDocuments] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -168,18 +175,57 @@ function App() {
     }
   };
 
-const addTeamMember = async () => {
-  if (!newMemberName.trim() || !activeProject) return;
-  const res = await fetch(`http://localhost:8000/api/projects/${activeProject.id}/team/add/`, {
-    ...jsonFetchOptions, method: 'POST', body: JSON.stringify({ username: newMemberName })
-  });
-  if (res.ok) {
-    alert(`Added ${newMemberName} to the project!`); // Simple confirmation
-    setNewMemberName('');
-  } else {
-    alert('Failed to add member. Ensure the username exists.');
-  }
-};
+  const addTeamMember = async () => {
+    if (!newMemberName.trim() || !activeProject) return;
+    const res = await fetch(`http://localhost:8000/api/projects/${activeProject.id}/team/add/`, {
+      ...jsonFetchOptions, method: 'POST', body: JSON.stringify({ username: newMemberName })
+    });
+    if (res.ok) {
+      alert(`Added ${newMemberName} to the project!`); // Simple confirmation
+      setNewMemberName('');
+    } else {
+      alert('Failed to add member. Ensure the username exists.');
+    }
+  };
+
+  const runExperiment = async () => {
+    if (!promptA.trim() || !promptB.trim() || !activeProject) return;
+    setIsExperimenting(true);
+    setResA('Thinking...');
+    setResB('Thinking...');
+
+    // Helper function to hit the chat endpoint and return the full text
+    const fetchResponse = async (message) => {
+      const res = await fetch(`http://localhost:8000/api/projects/${activeProject.id}/chat/`, {
+        ...jsonFetchOptions, method: 'POST', body: JSON.stringify({ message })
+      });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let fullText = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fullText += decoder.decode(value, { stream: true });
+      }
+      return fullText;
+    };
+
+    // Run both calls concurrently
+    const [outA, outB] = await Promise.all([fetchResponse(promptA), fetchResponse(promptB)]);
+    setResA(outA);
+    setResB(outB);
+    setIsExperimenting(false);
+  };
+
+  const saveEvaluation = async (winner) => {
+    const res = await fetch(`http://localhost:8000/api/projects/${activeProject.id}/evaluate/`, {
+      ...jsonFetchOptions, method: 'POST', body: JSON.stringify({
+        prompt_a: promptA, prompt_b: promptB, response_a: resA, response_b: resB, winner
+      })
+    });
+    if (res.ok) alert(`Saved! Prompt ${winner} was marked as better.`);
+  };
+
 
   // --- STYLES ---
   const containerStyle = { minHeight: '100vh', background: palette.background, padding: '40px', fontFamily: 'system-ui', color: palette.textDark };
@@ -218,48 +264,33 @@ const addTeamMember = async () => {
     return (
       <div style={containerStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <button onClick={() => setActiveProject(null)} style={{ ...btnStyle, background: palette.neutral, color: palette.textDark }}>
-            Back to Dashboard
-          </button>
-          {/* Replace the existing <h2> tag section with this: */}
-<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-    <button onClick={() => setActiveProject(null)} style={{ ...btnStyle, background: palette.neutral, color: palette.textDark }}>
-      Back to Dashboard
-    </button>
-    <h2 style={{ margin: 0 }}>{activeProject.name}</h2>
-  </div>
-  
-  {/* NEW: Team Member Input */}
-  <div style={{ display: 'flex', gap: '10px' }}>
-    <input 
-      placeholder="Username to add..." 
-      value={newMemberName} 
-      onChange={e => setNewMemberName(e.target.value)} 
-      style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${palette.neutral}`, outline: 'none' }}
-    />
-    <button onClick={addTeamMember} style={{ ...btnStyle, padding: '10px 16px' }}>
-      + Invite
-    </button>
-  </div>
-</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <button onClick={() => setActiveProject(null)} style={{ ...btnStyle, background: palette.neutral, color: palette.textDark }}>
+              Back to Dashboard
+            </button>
+            <h2 style={{ margin: 0 }}>{activeProject.name}</h2>
+          </div>
+          
+          {/* Team Member Input */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input 
+              placeholder="Username to add..." 
+              value={newMemberName} 
+              onChange={e => setNewMemberName(e.target.value)} 
+              style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${palette.neutral}`, outline: 'none' }}
+            />
+            <button onClick={addTeamMember} style={{ ...btnStyle, padding: '10px 16px' }}>
+              + Invite
+            </button>
+          </div>
         </div>
         
         <div style={cardStyle}>
-          {/* Custom Tab Navigation */}
+          {/* Custom Tab Navigation (Updated with 3rd Tab) */}
           <div style={{ display: 'flex', gap: '10px', borderBottom: `2px solid ${palette.neutral}`, paddingBottom: '15px', marginBottom: '20px' }}>
-            <button 
-              onClick={() => setProjectWindow('chat')} 
-              style={{ ...btnStyle, background: projectWindow === 'chat' ? palette.primary : 'transparent', color: projectWindow === 'chat' ? '#fff' : palette.textDark, border: projectWindow === 'chat' ? 'none' : `1px solid ${palette.neutral}` }}
-            >
-              Research Chat
-            </button>
-            <button 
-              onClick={() => setProjectWindow('docs')} 
-              style={{ ...btnStyle, background: projectWindow === 'docs' ? palette.primary : 'transparent', color: projectWindow === 'docs' ? '#fff' : palette.textDark, border: projectWindow === 'docs' ? 'none' : `1px solid ${palette.neutral}` }}
-            >
-              Document Management
-            </button>
+            <button onClick={() => setProjectWindow('chat')} style={{ ...btnStyle, background: projectWindow === 'chat' ? palette.primary : 'transparent', color: projectWindow === 'chat' ? '#fff' : palette.textDark, border: projectWindow === 'chat' ? 'none' : `1px solid ${palette.neutral}` }}>Research Chat</button>
+            <button onClick={() => setProjectWindow('docs')} style={{ ...btnStyle, background: projectWindow === 'docs' ? palette.primary : 'transparent', color: projectWindow === 'docs' ? '#fff' : palette.textDark, border: projectWindow === 'docs' ? 'none' : `1px solid ${palette.neutral}` }}>Document Management</button>
+            <button onClick={() => setProjectWindow('experiment')} style={{ ...btnStyle, background: projectWindow === 'experiment' ? palette.primary : 'transparent', color: projectWindow === 'experiment' ? '#fff' : palette.textDark, border: projectWindow === 'experiment' ? 'none' : `1px solid ${palette.neutral}` }}>A/B Experiment</button>
           </div>
 
           {/* VIEW: CHAT */}
@@ -326,6 +357,57 @@ const addTeamMember = async () => {
               )}
             </div>
           )}
+
+          {/* VIEW: EXPERIMENT */}
+          {projectWindow === 'experiment' && (
+            <div>
+              <h3 style={{ marginTop: 0 }}>Compare Prompts Side-by-Side</h3>
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+                
+                {/* Side A */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <textarea 
+                    placeholder="Prompt A (e.g., 'Summarize this formally')" 
+                    value={promptA} onChange={(e) => setPromptA(e.target.value)} 
+                    style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} 
+                  />
+                  <div style={{ flex: 1, minHeight: '200px', background: '#fff', border: `1px solid ${palette.neutral}`, borderRadius: '8px', padding: '15px', whiteSpace: 'pre-wrap' }}>
+                    <strong>Output A:</strong><br/><br/>{resA}
+                  </div>
+                  {resA && resA !== 'Thinking...' && (
+                    <button onClick={() => saveEvaluation('A')} style={{ ...btnStyle, background: palette.secondary, color: palette.textDark }}>
+                      🏆 Prompt A is Better
+                    </button>
+                  )}
+                </div>
+
+                {/* Side B */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <textarea 
+                    placeholder="Prompt B (e.g., 'Explain this like I am 5')" 
+                    value={promptB} onChange={(e) => setPromptB(e.target.value)} 
+                    style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} 
+                  />
+                  <div style={{ flex: 1, minHeight: '200px', background: '#fff', border: `1px solid ${palette.neutral}`, borderRadius: '8px', padding: '15px', whiteSpace: 'pre-wrap' }}>
+                    <strong>Output B:</strong><br/><br/>{resB}
+                  </div>
+                  {resB && resB !== 'Thinking...' && (
+                    <button onClick={() => saveEvaluation('B')} style={{ ...btnStyle, background: palette.secondary, color: palette.textDark }}>
+                      🏆 Prompt B is Better
+                    </button>
+                  )}
+                </div>
+
+              </div>
+              
+              <div style={{ textAlign: 'center' }}>
+                <button onClick={runExperiment} disabled={isExperimenting} style={{ ...btnStyle, padding: '15px 40px', fontSize: '16px' }}>
+                  {isExperimenting ? 'Running Evaluation...' : 'Run Experiment 🚀'}
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     );

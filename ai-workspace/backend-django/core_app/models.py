@@ -42,3 +42,14 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ['created_at']
+
+
+class Evaluation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='evaluations')
+    prompt_a = models.TextField()
+    prompt_b = models.TextField()
+    response_a = models.TextField()
+    response_b = models.TextField()
+    winner = models.CharField(max_length=10) # Will store 'A' or 'B'
+    created_at = models.DateTimeField(auto_now_add=True)

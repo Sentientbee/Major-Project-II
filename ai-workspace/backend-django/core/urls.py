@@ -18,4 +18,5 @@ urlpatterns = [
 
     path('api/projects/<uuid:project_id>/delete/', views.delete_project),
     path('api/projects/<uuid:project_id>/documents/<uuid:doc_id>/delete/', views.delete_document),
+    path('api/projects/<uuid:project_id>/evaluate/', views.save_evaluation),
 ]
