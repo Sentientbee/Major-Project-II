@@ -16,6 +16,7 @@ const palette = {
 
 function App() {
   const [user, setUser] = useState(null);
+  const [newMemberName, setNewMemberName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState(''); // Replaces standard alert()
@@ -167,6 +168,19 @@ function App() {
     }
   };
 
+const addTeamMember = async () => {
+  if (!newMemberName.trim() || !activeProject) return;
+  const res = await fetch(`http://localhost:8000/api/projects/${activeProject.id}/team/add/`, {
+    ...jsonFetchOptions, method: 'POST', body: JSON.stringify({ username: newMemberName })
+  });
+  if (res.ok) {
+    alert(`Added ${newMemberName} to the project!`); // Simple confirmation
+    setNewMemberName('');
+  } else {
+    alert('Failed to add member. Ensure the username exists.');
+  }
+};
+
   // --- STYLES ---
   const containerStyle = { minHeight: '100vh', background: palette.background, padding: '40px', fontFamily: 'system-ui', color: palette.textDark };
   const cardStyle = { background: palette.surface, padding: '30px', borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' };
@@ -207,7 +221,28 @@ function App() {
           <button onClick={() => setActiveProject(null)} style={{ ...btnStyle, background: palette.neutral, color: palette.textDark }}>
             Back to Dashboard
           </button>
-          <h2 style={{ margin: 0 }}>{activeProject.name}</h2>
+          {/* Replace the existing <h2> tag section with this: */}
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+    <button onClick={() => setActiveProject(null)} style={{ ...btnStyle, background: palette.neutral, color: palette.textDark }}>
+      Back to Dashboard
+    </button>
+    <h2 style={{ margin: 0 }}>{activeProject.name}</h2>
+  </div>
+  
+  {/* NEW: Team Member Input */}
+  <div style={{ display: 'flex', gap: '10px' }}>
+    <input 
+      placeholder="Username to add..." 
+      value={newMemberName} 
+      onChange={e => setNewMemberName(e.target.value)} 
+      style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${palette.neutral}`, outline: 'none' }}
+    />
+    <button onClick={addTeamMember} style={{ ...btnStyle, padding: '10px 16px' }}>
+      + Invite
+    </button>
+  </div>
+</div>
         </div>
         
         <div style={cardStyle}>

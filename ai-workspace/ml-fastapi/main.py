@@ -208,3 +208,18 @@ async def chat_endpoint(request: ChatRequest):
             yield f"Error processing tools: {str(e)}"
 
     return StreamingResponse(generate_response(), media_type="text/event-stream")
+
+
+@app.delete("/documents/{document_id}/")
+def delete_document_chunks(document_id: str):
+    db = SessionLocal()
+    try:
+        # Delete all chunks belonging to this document
+        db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
