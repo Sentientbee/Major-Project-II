@@ -129,7 +129,7 @@ def chat_gateway(request, project_id):
             content=user_message_content
         )
 
-        fastapi_url = "http://workspace-fastapi:8001/chat/"
+        fastapi_url = "http://ml-fastapi:8001/chat/"
         payload = {
             "project_id": str(project_id),
             "message": user_message_content
@@ -189,3 +189,17 @@ def save_evaluation(request, project_id):
             winner=data.get('winner')
         )
         return JsonResponse({'message': 'Evaluation saved!'})
+
+@csrf_exempt
+def clear_chat_history(request, project_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
+    
+    if request.method == 'POST':
+        try:
+            project = Project.objects.get(id=project_id, team__members=request.user)
+            # Delete all messages for this project
+            ChatMessage.objects.filter(project=project).delete()
+            return JsonResponse({'message': 'Chat history cleared successfully.'})
+        except Project.DoesNotExist:
+            return JsonResponse({'error': 'Project not found or unauthorized'}, status=403)

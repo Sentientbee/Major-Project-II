@@ -48,6 +48,13 @@ chat_model = ChatOpenAI(
 
 redis_client = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
 
+def safe_wikipedia(query: str) -> str:
+    try:
+        return wikipedia_tool.run(query)
+    except Exception as e:
+        return f"Wikipedia lookup failed: {e}"
+
+
 def check_rate_limit(project_id: str, limit: int = 20, window: int = 60):
     key = f"rate_limit:{project_id}"
     current = redis_client.get(key)
@@ -60,7 +67,12 @@ def check_rate_limit(project_id: str, limit: int = 20, window: int = 60):
     pipe.execute()
     return True
 
-wikipedia_tool = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
+wiki_tool = Tool(
+    name="Wikipedia",
+    func=safe_wikipedia,
+    description="Use for general factual web lookups."
+)
+
 
 class IngestRequest(BaseModel):
     document_id: str
@@ -99,9 +111,9 @@ async def chat_endpoint(request: ChatRequest):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Please wait a minute.")
         
     def retrieve_docs(query: str) -> str:
-        query_embedding = embeddings_model.embed_query(query)
-        db = SessionLocal()
         try:
+            query_embedding = embeddings_model.embed_query(query)
+            db = SessionLocal()
             chunks = db.query(DocumentChunk).filter(
                 DocumentChunk.project_id == request.project_id
             ).order_by(
@@ -111,16 +123,19 @@ async def chat_endpoint(request: ChatRequest):
             if not chunks:
                 return "No relevant information found in the uploaded documents."
             return "\n\n".join([chunk.text for chunk in chunks])
+        except Exception as embedding_error:
+            return f"Database query retrieval failed: {str(embedding_error)}"
         finally:
-            db.close()
+            if 'db' in locals():
+                db.close()
 
     doc_tool = Tool(
         name="Project_Database",
         func=retrieve_docs,
-        description="Always use this tool FIRST to search the user's uploaded PDF documents for context. Input should be a specific search query."
+        description="Useful for searching the user's uploaded PDF documents for project-specific context. Use this if the user asks questions about their uploaded files."
     )
 
-    tools = [doc_tool, wikipedia_tool]
+    tools = [doc_tool, wiki_tool]
 
     agent_executor = initialize_agent(
         tools, 
@@ -157,3 +172,7 @@ def delete_document_chunks(document_id: str):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+@app.post("/chat/clear/{project_id}/")
+def clear_fastapi_chat(project_id: str):
+    return {"status": "success"}

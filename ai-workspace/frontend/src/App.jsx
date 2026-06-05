@@ -185,29 +185,66 @@ function App() {
 
   const runExperiment = async () => {
     if (!promptA.trim() || !promptB.trim() || !activeProject) return;
+
     setIsExperimenting(true);
     setResA('Thinking...');
     setResB('Thinking...');
 
     const fetchResponse = async (message) => {
-      const res = await fetch(`http://localhost:8000/api/projects/${activeProject.id}/chat/`, {
-        ...jsonFetchOptions, method: 'POST', body: JSON.stringify({ message })
-      });
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let fullText = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        fullText += decoder.decode(value, { stream: true });
+      try {
+        const res = await fetch(
+          `http://localhost:8000/api/projects/${activeProject.id}/chat/`,
+          {
+            ...jsonFetchOptions,
+            method: 'POST',
+            body: JSON.stringify({ message }),
+          }
+        );
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`Server error ${res.status}: ${errorText}`);
+        }
+
+        if (!res.body) {
+          throw new Error('No response body received');
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+
+        let fullText = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) break;
+
+          fullText += decoder.decode(value, { stream: true });
+        }
+
+        return fullText;
+      } catch (error) {
+        console.error('Experiment chat error:', error);
+        return `Error: ${error.message}`;
       }
-      return fullText;
     };
 
-    const [outA, outB] = await Promise.all([fetchResponse(promptA), fetchResponse(promptB)]);
-    setResA(outA);
-    setResB(outB);
-    setIsExperimenting(false);
+    try {
+      const [outA, outB] = await Promise.all([
+        fetchResponse(promptA),
+        fetchResponse(promptB),
+      ]);
+
+      setResA(outA);
+      setResB(outB);
+    } catch (error) {
+      console.error('Experiment failed:', error);
+      setResA(`Error: ${error.message}`);
+      setResB(`Error: ${error.message}`);
+    } finally {
+      setIsExperimenting(false);
+    }
   };
 
   const saveEvaluation = async (winner) => {
@@ -217,6 +254,21 @@ function App() {
       })
     });
     if (res.ok) alert(`Saved! Prompt ${winner} was marked as better.`);
+  };
+
+  const handleClearChat = async () => {
+    if (!activeProject) return;
+    if (window.confirm("Are you sure you want to clear the chat history?")) {
+      const res = await fetch(`http://localhost:8000/api/projects/${activeProject.id}/chat/clear/`, {
+        ...jsonFetchOptions,
+        method: 'POST'
+      });
+      if (res.ok) {
+        setChatHistory([]); // Reset local state UI
+      } else {
+        alert("Failed to clear chat history.");
+      }
+    }
   };
 
   const containerStyle = { minHeight: '100vh', background: palette.background, padding: '40px', fontFamily: 'system-ui', color: palette.textDark };
@@ -282,6 +334,16 @@ function App() {
 
           {projectWindow === 'chat' && (
             <div style={{ display: 'flex', flexDirection: 'column', height: '60vh' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h4 style={{ margin: 0 }}>Conversation Log</h4>
+                <button 
+                  onClick={handleClearChat} 
+                  style={{ ...btnStyle, padding: '6px 12px', background: palette.warning, color: palette.textDark, fontSize: '14px' }}
+                >
+                  Clear Chat Reset
+                </button>
+              </div>
+
               <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#fff', borderRadius: '12px', border: `1px solid ${palette.neutral}`, marginBottom: '15px' }}>
                 {chatHistory.length === 0 ? (
                   <p style={{ color: palette.textDark, textAlign: 'center', marginTop: '50px', fontStyle: 'italic' }}>
