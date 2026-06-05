@@ -10,7 +10,6 @@ def process_document_task(document_id):
     doc.save()
 
     try:
-        # 1. Extract text
         text = ""
         with doc.file.open('rb') as f:
             reader = PyPDF2.PdfReader(f)
@@ -19,7 +18,6 @@ def process_document_task(document_id):
                 if extracted:
                     text += extracted + "\n"
 
-        # 2. Send to FastAPI
         fastapi_url = "http://ml-fastapi:8001/ingest/"
         payload = {
             "document_id": str(doc.id),
@@ -30,7 +28,6 @@ def process_document_task(document_id):
         response = requests.post(fastapi_url, json=payload)
         response.raise_for_status()
 
-        # 3. Mark as Ready
         doc.status = 'Ready'
         doc.save()
 

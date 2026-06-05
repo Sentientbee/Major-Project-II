@@ -1,12 +1,12 @@
-from django.shortcuts import render
 import json
-from .models import Document
-from .tasks import process_document_task
+import requests
+from django.shortcuts import render
 from django.contrib.auth import authenticate, login, get_user_model
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.views.decorators.csrf import csrf_exempt
-from .models import Project, Team
+from .models import Document, Project, Team, ChatMessage, Evaluation
+from .tasks import process_document_task
 
 User = get_user_model()
 
@@ -16,11 +16,11 @@ def signup_view(request):
     data = json.loads(request.body)
     username = data.get('username')
     password = data.get('password')
+    
     if User.objects.filter(username=username).exists():
         return JsonResponse({'error': 'User exists'}, status=400)
     
     user = User.objects.create_user(username=username, password=password)
-    # Automatically create a personal team for the user as a Team can be a single user
     team = Team.objects.create(name=f"{username}'s Team")
     team.members.add(user)
     
@@ -32,6 +32,7 @@ def signup_view(request):
 def login_view(request):
     data = json.loads(request.body)
     user = authenticate(request, username=data.get('username'), password=data.get('password'))
+    
     if user is not None:
         login(request, user)
         return JsonResponse({'message': 'Login successful', 'username': user.username})
@@ -43,13 +44,11 @@ def project_list_create(request):
         return JsonResponse({'error': 'Not authenticated'}, status=401)
 
     if request.method == 'GET':
-        # Get projects belonging to any team the user is in
         projects = Project.objects.filter(team__members=request.user).values('id', 'name', 'team__name')
         return JsonResponse(list(projects), safe=False)
 
     elif request.method == 'POST':
         data = json.loads(request.body)
-        # For simplicity, assign to the user's first team
         team = request.user.teams.first() 
         project = Project.objects.create(name=data.get('name'), team=team)
         return JsonResponse({'id': project.id, 'name': project.name}, status=201)
@@ -59,7 +58,10 @@ def document_list_create(request, project_id):
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Not authenticated'}, status=401)
 
-    project = Project.objects.get(id=project_id, team__members=request.user)
+    try:
+        project = Project.objects.get(id=project_id, team__members=request.user)
+    except Project.DoesNotExist:
+        return JsonResponse({'error': 'Project not found or unauthorized'}, status=403)
 
     if request.method == 'GET':
         docs = project.documents.values('id', 'title', 'status', 'uploaded_at')
@@ -71,23 +73,9 @@ def document_list_create(request, project_id):
             return JsonResponse({'error': 'No file provided'}, status=400)
         
         doc = Document.objects.create(title=file.name, file=file, project=project, status='Uploaded')
-        
-        # Trigger Celery Background Job
         process_document_task.delay(str(doc.id))
         
         return JsonResponse({'id': str(doc.id), 'title': doc.title, 'status': doc.status}, status=201)
-
-
-
-
-from django.http import StreamingHttpResponse
-import requests
-
-
-from django.http import StreamingHttpResponse, JsonResponse
-from .models import Document, Project, Team, ChatMessage # Ensure ChatMessage is imported
-import requests
-import json
 
 @csrf_exempt
 def add_team_member(request, project_id):
@@ -99,7 +87,6 @@ def add_team_member(request, project_id):
         new_username = data.get('username')
         
         try:
-            # Ensure the current user has access to the project
             project = Project.objects.get(id=project_id, team__members=request.user)
             user_to_add = User.objects.get(username=new_username)
             project.team.members.add(user_to_add)
@@ -115,7 +102,6 @@ def get_chat_history(request, project_id):
         return JsonResponse({'error': 'Not authenticated'}, status=401)
     
     if request.method == 'GET':
-        # Fetch ordered chats for the given project
         messages = ChatMessage.objects.filter(
             project_id=project_id, 
             project__team__members=request.user
@@ -131,13 +117,11 @@ def chat_gateway(request, project_id):
         data = json.loads(request.body)
         user_message_content = data.get("message")
         
-        # Verify the project belongs to the user's team
         try:
             project = Project.objects.get(id=project_id, team__members=request.user)
         except Project.DoesNotExist:
             return JsonResponse({'error': 'Not authorized'}, status=403)
 
-        # 1. Save the User's message instantly
         ChatMessage.objects.create(
             project=project, 
             user=request.user, 
@@ -159,7 +143,6 @@ def chat_gateway(request, project_id):
                         if chunk:
                             full_ai_response += chunk
                             yield chunk
-                # 2. Save the AI's response once the stream is completely finished
                 ChatMessage.objects.create(project=project, role='ai', content=full_ai_response)
             except requests.exceptions.RequestException as e:
                 error_msg = f"Error connecting to AI service: {str(e)}"
@@ -170,7 +153,8 @@ def chat_gateway(request, project_id):
 
 @csrf_exempt
 def delete_project(request, project_id):
-    if not request.user.is_authenticated: return JsonResponse({'error': 'Not authenticated'}, status=401)
+    if not request.user.is_authenticated: 
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
     if request.method == 'DELETE':
         Project.objects.filter(id=project_id, team__members=request.user).delete()
         return JsonResponse({'message': 'Deleted'})
@@ -181,21 +165,19 @@ def delete_document(request, project_id, doc_id):
         return JsonResponse({'error': 'Not authenticated'}, status=401)
         
     if request.method == 'DELETE':
-        # 1. Ping FastAPI to delete the vectorized embeddings first
-        fastapi_url = f"http://workspace-fastapi:8001/documents/{str(doc_id)}/"
+        fastapi_url = f"http://ml-fastapi:8001/documents/{str(doc_id)}/"
         try:
             requests.delete(fastapi_url, timeout=5)
         except requests.exceptions.RequestException as e:
             print(f"Warning: Failed to reach FastAPI to delete embeddings: {e}")
 
-        # 2. Delete the document record and file from Django
         Document.objects.filter(id=doc_id, project_id=project_id, project__team__members=request.user).delete()
         return JsonResponse({'message': 'Deleted'})
 
-
 @csrf_exempt
 def save_evaluation(request, project_id):
-    if not request.user.is_authenticated: return JsonResponse({'error': 'Not authenticated'}, status=401)
+    if not request.user.is_authenticated: 
+        return JsonResponse({'error': 'Not authenticated'}, status=401)
     if request.method == 'POST':
         data = json.loads(request.body)
         Evaluation.objects.create(

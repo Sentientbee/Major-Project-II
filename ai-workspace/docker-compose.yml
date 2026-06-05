@@ -1,5 +1,3 @@
-#version: '3.8'
-
 services:
 
   postgres:
@@ -38,14 +36,12 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     ports:
       - "5672:5672"
-      - "15672:15672" # Management UI
+      - "15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-
 
   backend-django:
     build:
@@ -76,30 +72,20 @@ services:
       - rabbitmq
       - postgres
 
-
   ml-fastapi:
-      build:
-        context: ./ml-fastapi
-      container_name: workspace-fastapi
-      command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
-      volumes:
-        - ./ml-fastapi:/app
-      ports:
-        - "8001:8001"
-      depends_on:
-        - redis
-        - rabbitmq
-      extra_hosts:                            # <-- ADD THIS
-        - "host.docker.internal:host-gateway" # <-- ADD THIS
-      # NVIDIA GPU Passthrough for your RTX 4050
-      # deploy:
-      #   resources:
-      #     reservations:
-      #       devices:
-      #         - driver: nvidia
-      #           count: 1
-      #           capabilities: [gpu]
-
+    build:
+      context: ./ml-fastapi
+    container_name: workspace-fastapi
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+    volumes:
+      - ./ml-fastapi:/app
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+      - rabbitmq
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     build:

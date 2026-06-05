@@ -16,7 +16,7 @@ class Project(models.Model):
 class Document(models.Model):
     STATUS_CHOICES = (
         ('Uploaded', 'Uploaded'),
-        ('Processing', 'Processing...'),
+        ('Processing', 'Processing'),
         ('Ready', 'Ready'),
         ('Failed', 'Failed'),
     )
@@ -27,7 +27,6 @@ class Document(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Uploaded')
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
-# Add this model at the end of core_app/models.py
 class ChatMessage(models.Model):
     ROLE_CHOICES = (
         ('user', 'User'),
@@ -43,7 +42,6 @@ class ChatMessage(models.Model):
     class Meta:
         ordering = ['created_at']
 
-
 class Evaluation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='evaluations')
@@ -51,5 +49,5 @@ class Evaluation(models.Model):
     prompt_b = models.TextField()
     response_a = models.TextField()
     response_b = models.TextField()
-    winner = models.CharField(max_length=10) # Will store 'A' or 'B'
+    winner = models.CharField(max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -3,15 +3,14 @@ import React, { useState, useEffect, useRef } from 'react';
 const fetchOptions = { credentials: 'include' };
 const jsonFetchOptions = { ...fetchOptions, headers: { 'Content-Type': 'application/json' } };
 
-// Phase 5 Pastel Palette
 const palette = {
-  primary: '#97B3AE',     // Muted Teal (Buttons, Active Tabs)
-  secondary: '#D2E0D3',   // Sage Green (AI Bubbles)
-  background: '#F0DDD6',  // Warm Dusty Pink (Main App Background)
-  warning: '#F2C3B9',     // Peach/Salmon (Errors, Delete Buttons)
-  neutral: '#D6CBBF',     // Warm Grey (User Bubbles, Borders)
-  surface: '#F0EEEA',     // Off-White (Cards, Modals)
-  textDark: '#4A4A4A'     // Soft Dark Grey for text readability
+  primary: '#97B3AE',
+  secondary: '#D2E0D3',
+  background: '#F0DDD6',
+  warning: '#F2C3B9',
+  neutral: '#D6CBBF',
+  surface: '#F0EEEA',
+  textDark: '#4A4A4A'
 };
 
 function App() {
@@ -19,9 +18,8 @@ function App() {
   const [newMemberName, setNewMemberName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState(''); // Replaces standard alert()
+  const [authError, setAuthError] = useState('');
 
-  // Phase 5: Experiment State
   const [promptA, setPromptA] = useState('');
   const [promptB, setPromptB] = useState('');
   const [resA, setResA] = useState('');
@@ -32,8 +30,7 @@ function App() {
   const [newProjectName, setNewProjectName] = useState('');
   const [activeProject, setActiveProject] = useState(null);
   
-  // View State: Separates Document Upload and Chat into distinct windows/tabs
-  const [projectWindow, setProjectWindow] = useState('chat'); // 'chat', 'docs', or 'experiment'
+  const [projectWindow, setProjectWindow] = useState('chat');
   
   const [documents, setDocuments] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -51,9 +48,8 @@ function App() {
     let interval;
     if (activeProject) {
       fetchDocuments(activeProject.id);
-      fetchChatHistory(activeProject.id); // Fetch previous chats!
+      fetchChatHistory(activeProject.id);
       
-      // Only poll docs if we are looking at the docs tab to save network calls
       if (projectWindow === 'docs') {
         interval = setInterval(() => fetchDocuments(activeProject.id), 5000);
       }
@@ -61,7 +57,6 @@ function App() {
     return () => clearInterval(interval);
   }, [activeProject, projectWindow]);
 
-  // Auto-scroll chat to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
@@ -114,7 +109,7 @@ function App() {
   };
 
   const deleteProject = async (projectId, e) => {
-    e.stopPropagation(); // Prevent opening the project when clicking delete
+    e.stopPropagation();
     const res = await fetch(`http://localhost:8000/api/projects/${projectId}/delete/`, {
       ...fetchOptions, method: 'DELETE'
     });
@@ -181,7 +176,7 @@ function App() {
       ...jsonFetchOptions, method: 'POST', body: JSON.stringify({ username: newMemberName })
     });
     if (res.ok) {
-      alert(`Added ${newMemberName} to the project!`); // Simple confirmation
+      alert(`Added ${newMemberName} to the project!`);
       setNewMemberName('');
     } else {
       alert('Failed to add member. Ensure the username exists.');
@@ -194,7 +189,6 @@ function App() {
     setResA('Thinking...');
     setResB('Thinking...');
 
-    // Helper function to hit the chat endpoint and return the full text
     const fetchResponse = async (message) => {
       const res = await fetch(`http://localhost:8000/api/projects/${activeProject.id}/chat/`, {
         ...jsonFetchOptions, method: 'POST', body: JSON.stringify({ message })
@@ -210,7 +204,6 @@ function App() {
       return fullText;
     };
 
-    // Run both calls concurrently
     const [outA, outB] = await Promise.all([fetchResponse(promptA), fetchResponse(promptB)]);
     setResA(outA);
     setResB(outB);
@@ -226,14 +219,11 @@ function App() {
     if (res.ok) alert(`Saved! Prompt ${winner} was marked as better.`);
   };
 
-
-  // --- STYLES ---
   const containerStyle = { minHeight: '100vh', background: palette.background, padding: '40px', fontFamily: 'system-ui', color: palette.textDark };
   const cardStyle = { background: palette.surface, padding: '30px', borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' };
   const inputStyle = { width: '100%', padding: '14px', borderRadius: '8px', border: `1px solid ${palette.neutral}`, outline: 'none', boxSizing: 'border-box' };
   const btnStyle = { padding: '14px 24px', borderRadius: '8px', border: 'none', background: palette.primary, color: '#fff', cursor: 'pointer', fontWeight: 'bold' };
 
-  // --- LOGIN VIEW ---
   if (!user) {
     return (
       <div style={{ ...containerStyle, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -259,7 +249,6 @@ function App() {
     );
   }
 
-  // --- PROJECT DETAIL VIEW (Separated Windows) ---
   if (activeProject) {
     return (
       <div style={containerStyle}>
@@ -271,7 +260,6 @@ function App() {
             <h2 style={{ margin: 0 }}>{activeProject.name}</h2>
           </div>
           
-          {/* Team Member Input */}
           <div style={{ display: 'flex', gap: '10px' }}>
             <input 
               placeholder="Username to add..." 
@@ -286,14 +274,12 @@ function App() {
         </div>
         
         <div style={cardStyle}>
-          {/* Custom Tab Navigation (Updated with 3rd Tab) */}
           <div style={{ display: 'flex', gap: '10px', borderBottom: `2px solid ${palette.neutral}`, paddingBottom: '15px', marginBottom: '20px' }}>
             <button onClick={() => setProjectWindow('chat')} style={{ ...btnStyle, background: projectWindow === 'chat' ? palette.primary : 'transparent', color: projectWindow === 'chat' ? '#fff' : palette.textDark, border: projectWindow === 'chat' ? 'none' : `1px solid ${palette.neutral}` }}>Research Chat</button>
             <button onClick={() => setProjectWindow('docs')} style={{ ...btnStyle, background: projectWindow === 'docs' ? palette.primary : 'transparent', color: projectWindow === 'docs' ? '#fff' : palette.textDark, border: projectWindow === 'docs' ? 'none' : `1px solid ${palette.neutral}` }}>Document Management</button>
             <button onClick={() => setProjectWindow('experiment')} style={{ ...btnStyle, background: projectWindow === 'experiment' ? palette.primary : 'transparent', color: projectWindow === 'experiment' ? '#fff' : palette.textDark, border: projectWindow === 'experiment' ? 'none' : `1px solid ${palette.neutral}` }}>A/B Experiment</button>
           </div>
 
-          {/* VIEW: CHAT */}
           {projectWindow === 'chat' && (
             <div style={{ display: 'flex', flexDirection: 'column', height: '60vh' }}>
               <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#fff', borderRadius: '12px', border: `1px solid ${palette.neutral}`, marginBottom: '15px' }}>
@@ -319,7 +305,7 @@ function App() {
               <div style={{ display: 'flex', gap: '10px' }}>
                 <input 
                   type="text" placeholder="Ask about your documents or search the web..." 
-                  value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                   disabled={isChatting} style={{ ...inputStyle, flex: 1 }} 
                 />
                 <button onClick={handleSendMessage} disabled={isChatting} style={{ ...btnStyle, background: isChatting ? palette.neutral : palette.primary }}>
@@ -329,7 +315,6 @@ function App() {
             </div>
           )}
 
-          {/* VIEW: DOCUMENTS */}
           {projectWindow === 'docs' && (
             <div>
               <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: `1px solid ${palette.neutral}`, marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -358,13 +343,11 @@ function App() {
             </div>
           )}
 
-          {/* VIEW: EXPERIMENT */}
           {projectWindow === 'experiment' && (
             <div>
               <h3 style={{ marginTop: 0 }}>Compare Prompts Side-by-Side</h3>
               <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
                 
-                {/* Side A */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <textarea 
                     placeholder="Prompt A (e.g., 'Summarize this formally')" 
@@ -376,12 +359,11 @@ function App() {
                   </div>
                   {resA && resA !== 'Thinking...' && (
                     <button onClick={() => saveEvaluation('A')} style={{ ...btnStyle, background: palette.secondary, color: palette.textDark }}>
-                      🏆 Prompt A is Better
+                      Prompt A is Better
                     </button>
                   )}
                 </div>
 
-                {/* Side B */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <textarea 
                     placeholder="Prompt B (e.g., 'Explain this like I am 5')" 
@@ -393,7 +375,7 @@ function App() {
                   </div>
                   {resB && resB !== 'Thinking...' && (
                     <button onClick={() => saveEvaluation('B')} style={{ ...btnStyle, background: palette.secondary, color: palette.textDark }}>
-                      🏆 Prompt B is Better
+                      Prompt B is Better
                     </button>
                   )}
                 </div>
@@ -413,7 +395,6 @@ function App() {
     );
   }
 
-  // --- DASHBOARD VIEW ---
   return (
     <div style={containerStyle}>
       <div style={{ ...cardStyle, marginBottom: '30px', background: palette.primary, color: '#fff' }}>
