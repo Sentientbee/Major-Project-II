@@ -116,6 +116,22 @@ def document_list_create(request, project_id):
         if not file:
             return JsonResponse({'error': 'No file provided'}, status=400)
 
+        # Fix for Duplicate PDFs: Check if file title already exists in the project
+        existing_doc = Document.objects.filter(project=project, title=file.name).first()
+        if existing_doc:
+            if existing_doc.status == 'Failed':
+                # Retry processing instead of returning failure immediately
+                existing_doc.status = 'Uploaded'
+                existing_doc.save()
+                process_document_task.delay(str(existing_doc.id))
+            
+            # Gracefully return the existing document info without saving a duplicate file
+            return JsonResponse({
+                'id': str(existing_doc.id), 
+                'title': existing_doc.title, 
+                'status': existing_doc.status
+            }, status=200)
+
         doc = Document.objects.create(title=file.name, file=file, project=project, status='Uploaded')
         process_document_task.delay(str(doc.id))
         return JsonResponse({'id': str(doc.id), 'title': doc.title, 'status': doc.status}, status=201)
@@ -127,7 +143,8 @@ def delete_document(request, project_id, doc_id):
         return JsonResponse({'error': 'Not authenticated'}, status=401)
 
     if request.method == 'DELETE':
-        fastapi_url = f"http://workspace-fastapi:8001/documents/{str(doc_id)}/"
+        # Use Docker service name (ml-fastapi)
+        fastapi_url = f"http://ml-fastapi:8001/documents/{str(doc_id)}/"
         try:
             requests.delete(fastapi_url, timeout=5)
         except requests.exceptions.RequestException as e:
@@ -235,11 +252,6 @@ def chat_gateway(request, project_id):
     """
     POST /api/projects/<pid>/chat/
     Body: { "message": "...", "session_id": "<uuid>" }
-
-    - Saves the user message to the given session
-    - Fetches the full session history and sends it to FastAPI
-      so the model has conversational context (stateful multi-turn)
-    - Streams the AI response back and persists it once complete
     """
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Not authenticated'}, status=401)
@@ -286,11 +298,12 @@ def chat_gateway(request, project_id):
                 for m in prior_messages
             ]
 
-        fastapi_url = "http://workspace-fastapi:8001/chat/"
+        # Use Docker service name (ml-fastapi)
+        fastapi_url = "http://ml-fastapi:8001/chat/"
         payload = {
             "project_id": str(project_id),
             "message": user_message_content,
-            "history": history   # <-- enables stateful multi-turn conversation
+            "history": history   
         }
 
         def stream_generator():
