@@ -36,7 +36,8 @@ text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=10
 from fastapi.responses import StreamingResponse
 from fastapi import Request
 from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain.schema import HumanMessage, SystemMessage, AIMessage
+from langchain_core.prompts import MessagesPlaceholder
 import redis
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
@@ -102,6 +103,7 @@ def ingest_document(request: IngestRequest):
 class ChatRequest(BaseModel):
     project_id: str
     message: str
+    history: list[dict] = []  # Added history field to receive memory from Django
 
 @app.post("/chat/")
 async def chat_endpoint(request: ChatRequest):
@@ -125,6 +127,14 @@ async def chat_endpoint(request: ChatRequest):
     finally:
         db.close()
 
+    # Parse history into LangChain message objects
+    chat_history = []
+    for msg in request.history:
+        if msg.get('role') == 'user':
+            chat_history.append(HumanMessage(content=msg.get('content', '')))
+        elif msg.get('role') == 'ai':
+            chat_history.append(AIMessage(content=msg.get('content', '')))
+
     # --- UI Rendering Instructions Added to System Prompt ---
     system_prompt = (
         "You are an AI research assistant. Use the following document context to "
@@ -145,18 +155,24 @@ async def chat_endpoint(request: ChatRequest):
         agent=AgentType.OPENAI_FUNCTIONS,
         verbose=True,
         handle_parsing_errors=True,
-        system_message=SystemMessage(content=system_prompt)
+        agent_kwargs={
+            "system_message": SystemMessage(content=system_prompt),
+            "extra_prompt_messages": [MessagesPlaceholder(variable_name="memory")], # Inject memory placeholder
+        }
     )
 
     async def generate_response():
         try:
-            response = await agent_executor.ainvoke({"input": request.message})
-            output = response.get("output", "I could not find an answer.")
-
-            chunk_size = 20
-            for i in range(0, len(output), chunk_size):
-                yield output[i:i + chunk_size]
-
+            # Native token-by-token streaming using astream_events
+            async for event in agent_executor.astream_events(
+                {"input": request.message, "memory": chat_history}, 
+                version="v1"
+            ):
+                # Stream only the text content generated directly by the LLM
+                if event["event"] == "on_chat_model_stream":
+                    token = event["data"]["chunk"].content
+                    if token:
+                        yield token
         except Exception as e:
             yield f"Error processing request: {str(e)}"
 

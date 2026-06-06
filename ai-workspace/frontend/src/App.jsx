@@ -79,8 +79,11 @@ function App() {
     }
   }, [activeSession]);
 
+  // Smoother scrolling behavior
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
   }, [chatHistory, streamingContent]);
 
   const fetchProjects = async () => {
@@ -234,15 +237,21 @@ function App() {
       let aiResponse = '';
 
       while (true) {
+        // BREAK EARLY if component unmounted or user switched tabs to prevent memory leaks
+        if (abortControllerRef.current?.signal.aborted) break;
+        
         const { done, value } = await reader.read();
         if (done) break;
+        
         aiResponse += decoder.decode(value, { stream: true });
         // Update the isolated streaming state instead of the array to prevent memory leaks
         setStreamingContent(aiResponse);
       }
       
-      // Once complete, push to formal history array
-      setChatHistory(prev => [...prev, { role: 'ai', content: aiResponse }]);
+      // Once complete, push to formal history array (only if not aborted)
+      if (!abortControllerRef.current?.signal.aborted) {
+        setChatHistory(prev => [...prev, { role: 'ai', content: aiResponse }]);
+      }
       setStreamingContent('');
 
     } catch (error) {

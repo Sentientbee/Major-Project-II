@@ -11,8 +11,16 @@ def process_document_task(document_id):
     doc.save()
 
     try:
-        fastapi_url = "http://ml-fastapi:8001/ingest/"
+        fastapi_url = "http://ml-fastapi:8001"
         
+        # --- FIX: Clear any existing partial chunks before starting to prevent duplication ---
+        try:
+            requests.delete(f"{fastapi_url}/documents/{document_id}/", timeout=10)
+            print(f"Cleared existing chunks for {document_id} to prevent duplication.")
+        except requests.exceptions.RequestException as e:
+            print(f"Warning: Could not clear previous chunks: {e}")
+        # -----------------------------------------------------------------------------------
+
         text_buffer = ""
         # Send to FastAPI in chunks of roughly 10,000 characters
         # This prevents both the Celery Worker and FastAPI from running out of memory
@@ -37,7 +45,7 @@ def process_document_task(document_id):
                             "project_id": str(doc.project.id),
                             "text": text_buffer
                         }
-                        response = requests.post(fastapi_url, json=payload, timeout=60)
+                        response = requests.post(f"{fastapi_url}/ingest/", json=payload, timeout=60)
                         response.raise_for_status()
                         
                         # Wipe the buffer to free up RAM
@@ -54,7 +62,7 @@ def process_document_task(document_id):
                 "project_id": str(doc.project.id),
                 "text": text_buffer
             }
-            response = requests.post(fastapi_url, json=payload, timeout=60)
+            response = requests.post(f"{fastapi_url}/ingest/", json=payload, timeout=60)
             response.raise_for_status()
 
         print(f"Successfully finished processing document: {document_id}")
