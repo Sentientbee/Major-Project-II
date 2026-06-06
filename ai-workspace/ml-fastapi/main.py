@@ -45,7 +45,7 @@ from langchain.agents import initialize_agent, AgentType
 # We use host.docker.internal to reach LMStudio running on your host machine
 chat_model = ChatOpenAI(
     base_url="http://host.docker.internal:1234/v1",
-    api_key="lm-studio",  # API key is required but ignored by LMStudio
+    api_key="lm-studio",  
     streaming=True,
     temperature=0.7
 )
@@ -54,7 +54,6 @@ chat_model = ChatOpenAI(
 redis_client = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
 
 def check_rate_limit(project_id: str, limit: int = 20, window: int = 60):
-    """Allows 20 requests per minute per project."""
     key = f"rate_limit:{project_id}"
     current = redis_client.get(key)
     if current and int(current) >= limit:
@@ -66,8 +65,6 @@ def check_rate_limit(project_id: str, limit: int = 20, window: int = 60):
     pipe.execute()
     return True
 
-# --- Wikipedia Tool Setup ---
-# Fix: explicitly configure the wrapper so it returns meaningful content
 wikipedia_wrapper = WikipediaAPIWrapper(
     top_k_results=3,
     doc_content_chars_max=2000
@@ -75,12 +72,10 @@ wikipedia_wrapper = WikipediaAPIWrapper(
 wikipedia_tool = WikipediaQueryRun(api_wrapper=wikipedia_wrapper)
 tools = [wikipedia_tool]
 
-
 class IngestRequest(BaseModel):
     document_id: str
     project_id: str
     text: str
-
 
 @app.post("/ingest/")
 def ingest_document(request: IngestRequest):
@@ -104,22 +99,18 @@ def ingest_document(request: IngestRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class ChatRequest(BaseModel):
     project_id: str
     message: str
 
-
 @app.post("/chat/")
 async def chat_endpoint(request: ChatRequest):
-    # Enforce Rate Limiting
     if not check_rate_limit(request.project_id):
         raise HTTPException(
             status_code=429,
             detail="Rate limit exceeded. Please wait a minute."
         )
 
-    # 1. Embed the user message and retrieve relevant document chunks
     query_embedding = embeddings_model.embed_query(request.message)
 
     db = SessionLocal()
@@ -134,17 +125,20 @@ async def chat_endpoint(request: ChatRequest):
     finally:
         db.close()
 
-    # 2. Build the system prompt with retrieved context
+    # --- UI Rendering Instructions Added to System Prompt ---
     system_prompt = (
         "You are an AI research assistant. Use the following document context to "
         f"answer the user's question:\n\n{context}\n\n"
-        "If the answer is not in the documents, use the Wikipedia tool to search for it."
+        "If the answer is not in the documents, use the Wikipedia tool to search for it.\n\n"
+        "--- UI INSTRUCTIONS ---\n"
+        "If the user asks for a chart, graph, or visualization of data (e.g., quarterly earnings, comparisons), "
+        "you MUST include a structured JSON block in your response using the following format:\n"
+        "```json\n"
+        '{\n  "type": "bar_chart",\n  "title": "Your Chart Title",\n  "data": [\n    {"name": "Label 1", "value": 100},\n    {"name": "Label 2", "value": 150}\n  ]\n}\n'
+        "```\n"
+        "Provide a brief text explanation before the JSON."
     )
 
-    # 3. Initialize the Langchain agent.
-    # Fix: OPENAI_FUNCTIONS is the correct agent type for ChatOpenAI models;
-    # CHAT_ZERO_SHOT_REACT_DESCRIPTION often fails with local LLMs due to
-    # strict output parsing that the model cannot reliably satisfy.
     agent_executor = initialize_agent(
         tools,
         chat_model,
@@ -156,12 +150,9 @@ async def chat_endpoint(request: ChatRequest):
 
     async def generate_response():
         try:
-            # Pass the plain user question; system context is already in agent system_message
             response = await agent_executor.ainvoke({"input": request.message})
-
             output = response.get("output", "I could not find an answer.")
 
-            # Chunk the output to maintain the streaming UI effect
             chunk_size = 20
             for i in range(0, len(output), chunk_size):
                 yield output[i:i + chunk_size]
@@ -170,7 +161,6 @@ async def chat_endpoint(request: ChatRequest):
             yield f"Error processing request: {str(e)}"
 
     return StreamingResponse(generate_response(), media_type="text/event-stream")
-
 
 @app.delete("/documents/{document_id}/")
 def delete_document_chunks(document_id: str):
