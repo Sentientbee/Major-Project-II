@@ -135,16 +135,25 @@ async def chat_endpoint(request: ChatRequest):
         elif msg.get('role') == 'ai':
             chat_history.append(AIMessage(content=msg.get('content', '')))
 
-    # --- UI Rendering Instructions Added to System Prompt ---
+    # --- UI Rendering Instructions Expanded ---
     system_prompt = (
         "You are an AI research assistant. Use the following document context to "
         f"answer the user's question:\n\n{context}\n\n"
         "If the answer is not in the documents, use the Wikipedia tool to search for it.\n\n"
         "--- UI INSTRUCTIONS ---\n"
-        "If the user asks for a chart, graph, or visualization of data (e.g., quarterly earnings, comparisons), "
-        "you MUST include a structured JSON block in your response using the following format:\n"
+        "If the user asks for a chart, graph, or visualization of data (e.g., quarterly earnings, comparisons, financial trends), "
+        "you MUST include a structured JSON block in your response to render it in the UI. "
+        "Supported types are 'bar_chart', 'line_chart', and 'pie_chart'.\n"
+        "Use the following exact format:\n"
         "```json\n"
-        '{\n  "type": "bar_chart",\n  "title": "Your Chart Title",\n  "data": [\n    {"name": "Label 1", "value": 100},\n    {"name": "Label 2", "value": 150}\n  ]\n}\n'
+        "{\n"
+        '  "type": "bar_chart",\n'
+        '  "title": "Your Chart Title",\n'
+        '  "data": [\n'
+        '    {"name": "Label 1", "value": 100},\n'
+        '    {"name": "Label 2", "value": 150}\n'
+        '  ]\n'
+        "}\n"
         "```\n"
         "Provide a brief text explanation before the JSON."
     )
